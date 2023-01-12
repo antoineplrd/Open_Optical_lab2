@@ -49,7 +49,6 @@ class Signal_information:
 
     def UpdatePath_CrossedNode(self):
         if self._path is not None:
-
             del self._path[0]
 
     def UpdateLatency(self, latency):

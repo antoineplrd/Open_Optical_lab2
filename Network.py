@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 from Node import Node
 from Connection import Connection
 from Line import Line
+from tabulate import tabulate
 from Signal_information import Signal_information
 
 
@@ -114,6 +115,9 @@ class Network:
                     var.append((i, j))
                     path.append(self.find_paths(i, j))
 
+        copiesOfLine = list()
+        for i in self._lines:
+            copiesOfLine.append(self._lines.get(i).state)
         test = list()
 
         for i in path:
@@ -124,6 +128,11 @@ class Network:
                 ratio = 10 * math.log10(signal_information.signal_power / signal_information.noise_power)
                 test.append(list([path_cpy, signal_information.latency, signal_information.noise_power, ratio]))
 
+        a = 0
+        for i in self._lines:
+            self._lines.get(i).state = copiesOfLine[a]
+            a += 1
+
         data = {
 
             "Paths": [i[0] for i in test],
@@ -132,7 +141,7 @@ class Network:
             "Signal/noise (dB)": [i[3] for i in test]
         }
         df = pd.DataFrame(data)
-
+        # print(tabulate(df, showindex=True, headers=df.columns))
         return df
 
     def find_best_snr(self, input_node, output_node):
@@ -144,34 +153,39 @@ class Network:
 
         for i in all_paths:
             if i[0] == input_node and i[len(i) - 1] == output_node:
-                if all_noise_radio[all_paths.index(i)] > noise_radio:
-                    for label in len(i) - 1:
-                        line = i[label] + i[label + 1]
-                        if self._lines.get(line).state == 1:
-                            noise_radio = all_noise_radio[all_paths.index(i)]
-                            path = i
+                test = True
+                Path = i.replace('->', "")  # we remove "->"
+                for label in range(len(Path) - 1):
+                    line = Path[label] + Path[label + 1]
+                    if self._lines.get(line).state == 0:  # case when we have a line already occupied
+                        test = False
+
+                if all_noise_radio[all_paths.index(i)] > noise_radio and test is True:
+                    noise_radio = all_noise_radio[all_paths.index(i)]
+                    path = i
 
         return path
 
     def find_best_latency(self, input_node, output_node):
         path = ""
         Dataframe = self._weighted_paths
-        all_paths = Dataframe["Paths"].tolist()
+        all_paths = Dataframe['Paths'].tolist()
         all_latency = Dataframe["Latency (s)"].tolist()
         latency = max(all_latency)
 
         for i in all_paths:
-
             if i[0] == input_node and i[len(i) - 1] == output_node:
-                if all_latency[all_paths.index(i)] < latency:
-                    Path = i.replace('->', "")  # we remove "->"
+                test = True
+                Path = i.replace('->', "")  # we remove "->"
+                for label in range(len(Path) - 1):
+                    line = Path[label] + Path[label + 1]
+                    if self._lines.get(line).state == 0:  # case when we have a line already occupied
+                        test = False
 
-                    for label in range(len(Path)):
-                        if label < len(Path) - 1:  # dealing with the case for the last line
-                            line = Path[label] + Path[label + 1]
-                        if self._lines.get(line).state == 1:
-                            latency = all_latency[all_paths.index(i)]
-                            path = i
+                if all_latency[all_paths.index(i)] < latency and test is True:
+                    latency = all_latency[all_paths.index(i)]
+                    path = i
+
         return path
 
     def stream(self, connection, label="latency"):
@@ -181,12 +195,12 @@ class Network:
         signal_power = connection.signal_power
 
         if label == "snr":
-
-            path_snr = self.find_best_latency(input, output)
+            path_snr = self.find_best_snr(input, output)
             path_snr = list(path_snr.split("->"))
 
-            signal_information = Signal_information(signal_power, path_snr)
-            if path_snr != "":
+            if path_snr != ['']:
+                print(path_snr)
+                signal_information = Signal_information(signal_power, path_snr)
                 propagate_snr = self.propagate(signal_information)
                 connection.snr = propagate_snr.snr
             else:
@@ -194,10 +208,11 @@ class Network:
 
         elif label == "latency":
             path_latency = self.find_best_latency(input, output)
-
             path_latency = list(path_latency.split("->"))
-            signal_information = Signal_information(signal_power, path_latency)
-            if path_latency != "":
+            print(path_latency)
+
+            if path_latency != ['']:
+                signal_information = Signal_information(signal_power, path_latency)
                 propagate_latency = self.propagate(signal_information)
                 connection.latency = propagate_latency.latency
             else:
